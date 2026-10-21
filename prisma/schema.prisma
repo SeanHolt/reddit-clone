@@ -1,0 +1,272 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  password            String
+  username            String?   @unique
+  displayName         String?
+  bio                 String?
+  image               String?
+  postKarma           Int       @default(0)
+  commentKarma        Int       @default(0)
+  lastActiveAt        DateTime?
+  activeSubredditName String?
+
+  createdSubreddits Subreddit[]
+  posts             Post[]
+  comments          Comment[]
+  votes             Vote[]
+  subscriptions     Subscription[]
+  notifications     Notification[]     @relation("UserNotifications")
+  reports           Report[]
+  moderationActions ModerationAction[]
+  sentDMs           DirectMessage[]    @relation("SentDMs")
+  receivedDMs       DirectMessage[]    @relation("ReceivedDMs")
+  pollVotes PollVote[]
+  savedPosts SavedPost[]
+  karmaLogs KarmaLog[]
+  postViews PostView[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+model PollOption {
+  id        String     @id @default(cuid())
+  text      String     // e.g., "React Server Components"
+  postId    String
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+  createdAt DateTime   @default(now())
+
+  @@index([postId])
+}
+
+model PollVote {
+  id       String     @id @default(cuid())
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  optionId String
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, optionId]) // Prevents single-user duplicate option gaming
+  @@index([optionId])
+}
+model SavedPost {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations to User and Post models
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // Prevents single-user duplicate saving
+  @@index([userId])
+}
+model Subreddit {
+  id                 String             @id @default(cuid())
+  name               String             @unique
+  description        String?
+  bannerUrl          String?            @default("")
+  accentColor        String?            @default("#ea580c")
+  autoModKeywords    String?            @default("")
+
+  // Phase 5 Moderation Restriction Gates
+  minAccountAgeDays  Int                @default(0)
+  minKarmaRequired   Int                @default(0)
+
+  creatorId          String
+  creator            User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  posts              Post[]
+  subscribers        Subscription[]
+  moderationActions  ModerationAction[]
+  flairs             UserFlair[]
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+model Post {
+  id        String  @id @default(cuid())
+  title     String
+  content   String?
+  isNSFW    Boolean @default(false)
+  isSpoiler Boolean @default(false)
+  isSticky  Boolean @default(false)
+
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  comments      Comment[]
+  votes         Vote[]
+  media         PostMedia[]
+  notifications Notification[]
+  reports       Report[]
+  views         PostView[]
+  pollOptions PollOption[]
+  savedPosts SavedPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PostMedia {
+  id        String   @id @default(cuid())
+  url       String
+  bytes     Bytes?
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Comment {
+  id       String  @id @default(cuid())
+  text     String
+  parentId String?
+  postId   String
+  post     Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  votes   Vote[]
+  reports Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserFlair {
+  id              String @id @default(cuid())
+  text            String // e.g., "Contributor", "Expert"
+  backgroundColor String @default("#f3f4f6") // Hex styling configuration
+  textColor       String @default("#1f2937")
+
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([subredditId])
+}
+
+model Subscription {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  // Phase 5 Assigned User Flair Parameters
+  selectedFlair String? @default("")
+
+  @@unique([userId, subredditId])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  type      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  userId    String
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  reason    String
+  details   String?  @default("")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId String?
+  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  text       String
+  senderId   String
+  sender     User     @relation("SentDMs", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedDMs", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model ModerationAction {
+  id          String    @id @default(cuid())
+  type        String
+  reason      String?   @default("")
+  expiresAt   DateTime?
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, subredditId])
+  @@index([userId])
+  @@index([subredditId])
+}
+
+model KarmaLog {
+  id        String   @id @default(cuid())
+  type      String // e.g., "POST_UPVOTE", "COMMENT_UPVOTE", "MILESTONE_BONUS"
+  points    Int // Positive or negative score delta
+  reason    String // Context text description log string
+  createdAt DateTime @default(now())
+
+  // Target User receiving the ledger adjustment
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PostView {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations to User and Post models
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId]) // Prevents single-user view count spamming
+  @@index([postId])
+}
