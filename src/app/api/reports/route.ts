@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-    const { targetId, targetType, reason, details } = await req.json();
+    const { targetId, targetType, reason } = await req.json();
     if (!targetId || !["POST", "COMMENT"].includes(targetType) || !reason) {
       return NextResponse.json({ message: "Invalid payload parameters." }, { status: 422 });
     }
@@ -20,7 +20,6 @@ export async function POST(req: Request) {
     const report = await db.report.create({
       data: {
         reason,
-        details: details?.trim() || "",
         userId: session.user.id,
         postId: targetType === "POST" ? targetId : null,
         commentId: targetType === "COMMENT" ? targetId : null,

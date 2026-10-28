@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { TypingIndicator } from "./TypingIndicator";
+import { ReadReceiptIndicator } from "./ReadReceiptIndicator";
 
 export interface MessageItem {
     id: string;
@@ -98,9 +100,10 @@ export function DirectMessagePane({ initialMessages, currentUserId, receiverId, 
             setIsLoading(false);
         }
     };
-
+    const lastMsg = messages && messages.length > 0 ? messages[messages.length - 1] : null;
+    const lastMessageTimeStr = lastMsg ? (lastMsg.createdAt).toLocaleString() : null;
     return (
-        <div className="flex flex-col h-[75vh] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden transition-colors duration-200">
+        <div className="h-full border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 flex flex-col overflow-hidden shadow-sm">
             <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
                 <h2 className="text-sm font-bold text-gray-900 dark:text-gray-100">Chat with u/{receiverUsername}</h2>
@@ -122,7 +125,17 @@ export function DirectMessagePane({ initialMessages, currentUserId, receiverId, 
                 )}
                 <div ref={scrollRef} />
             </div>
-
+            <ReadReceiptIndicator
+                currentUserId={currentUserId}
+                receiverId={receiverId}
+                lastMessageTimestamp={lastMessageTimeStr}
+            />
+            <TypingIndicator
+                currentUserId={currentUserId}
+                receiverId={receiverId}
+                receiverUsername={receiverUsername}
+                inputValue={text} // Listens directly to your existing state variable input string
+            />
             <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-950/10 flex gap-2">
                 <input type="text" value={text} onChange={(e) => setText(e.target.value)} placeholder={`Message u/${receiverUsername}...`} disabled={isLoading} className="flex-1 px-4 py-2 text-sm bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 rounded-full focus:outline-none focus:ring-1 focus:ring-orange-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 disabled:opacity-50" />
                 <button type="submit" disabled={isLoading || !text.trim()} className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs px-5 rounded-full transition disabled:opacity-50 shadow-sm">Send</button>

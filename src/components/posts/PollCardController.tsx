@@ -3,95 +3,89 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-interface OptionItem {
+// Strict structural sub-type interface matching our Prisma inclusion payload matrix
+interface PollOptionWithVotes {
   id: string;
   text: string;
-  _count: { votes: number };
+  postId: string;
+  createdAt: Date;
+  votes: {
+    userId: string;
+  }[];
 }
 
 interface PollCardControllerProps {
   postId: string;
-  initialOptions: OptionItem[];
-  userVoteOptionId: string | null;
-  hasUser: boolean;
+  pollOptions: PollOptionWithVotes[]; // Aligned perfectly with our feed data schemas
+  currentUserId: string | null | undefined;
 }
 
-export function PollCardController({ postId, initialOptions, userVoteOptionId, hasUser }: PollCardControllerProps) {
-  const [options, setOptions] = useState<OptionItem[]>(initialOptions);
-  const [selectedId, setSelectedId] = useState<string | null>(userVoteOptionId);
+export function PollCardController({ postId, pollOptions, currentUserId }: PollCardControllerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  if (!pollOptions || pollOptions.length === 0) return null; // Guard against empty poll data
+  // 1. Verify if the active viewer has already cast a ballot inside this poll
+  const hasUserVoted = pollOptions.some((opt) => 
+    opt.votes.some((v) => v.userId === currentUserId)
+  );
 
-  const totalVotes = options.reduce((acc, curr) => acc + curr._count.votes, 0);
+  // 2. Aggregate the cumulative total of all cast survey votes
+  const totalVotes = pollOptions.reduce((sum, opt) => sum + opt.votes.length, 0);
 
-  const handleCastPollVote = async (optionId: string) => {
-    if (!hasUser) return alert("Log in to participate in this poll!");
-    if (isLoading || selectedId === optionId) return;
+  const handleCastVote = async (optionId: string) => {
+    if (!currentUserId) return alert("Please log in to participate in community polls!");
+    if (isLoading || hasUserVoted) return;
 
     setIsLoading(true);
-    const originalOptions = [...options];
-    const originalSelected = selectedId;
-
-    // Optimistically update metrics arrays instantly locally before network transactions complete
-    setSelectedId(optionId);
-    setOptions((prev) =>
-      prev.map((opt) => {
-        let voteCount = opt._count.votes;
-        if (opt.id === originalSelected) voteCount = Math.max(0, voteCount - 1);
-        if (opt.id === optionId) voteCount += 1;
-        return { ...opt, _count: { votes: voteCount } };
-      })
-    );
-
     try {
       const res = await fetch("/api/posts/poll/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ optionId, postId })
+        body: JSON.stringify({ postId, optionId }),
       });
 
-      if (!res.ok) throw new Error("Failed to post vote.");
+      if (!res.ok) throw new Error();
+      
       router.refresh();
-    } catch {      // Automatic fallback rollback states on transaction transmission failure
-      setSelectedId(originalSelected);
-      setOptions(originalOptions);
+    } catch {
+      alert("Error recording your poll selection.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="space-y-2 border border-gray-100 dark:border-gray-800/80 p-4 bg-gray-50/30 dark:bg-gray-950/10 rounded-xl max-w-md select-none transition-colors">
-      <div className="flex justify-between items-center text-[10px] uppercase font-black tracking-wider text-gray-400 mb-1">
-        <span>📊 Interactive Survey Poll</span>
-        <span>{totalVotes} Total Votes</span>
+    <div className="p-4 bg-gray-50/50 dark:bg-gray-950/20 border border-gray-200 dark:border-gray-800 rounded-xl space-y-2.5 max-w-md select-none text-xs font-semibold text-gray-700 dark:text-gray-300 transition-colors">
+      <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-400 tracking-wider">
+        <span>📊 Community Survey Poll</span>
+        <span className="font-mono">{totalVotes} votes cast</span>
       </div>
+
       <div className="space-y-2">
-        {options.map((opt) => {
-          const percentage = totalVotes > 0 ? Math.round((opt._count.votes / totalVotes) * 100) : 0;
-          const isMyVote = selectedId === opt.id;
+        {pollOptions.map((opt) => {
+          const voteCount = opt.votes.length;
+          const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
 
           return (
-            <button
-              key={opt.id}
-              type="button"
-              disabled={isLoading}
-              onClick={() => handleCastPollVote(opt.id)}
-              className="w-full relative overflow-hidden h-10 border border-gray-200 dark:border-gray-800 rounded-lg text-left text-xs font-bold transition hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-gray-950 text-gray-800 dark:text-gray-200"
-            >
-              {/* Responsive progress visualization overlay filling the background element layout blocks */}
-              <div 
-                className={`absolute left-0 top-0 bottom-0 transition-all duration-500 ease-out ${isMyVote ? "bg-orange-600/15" : "bg-gray-100 dark:bg-gray-800/50"}`}
-                style={{ width: `${percentage}%` }}
-              />
-              <div className="absolute inset-0 px-4 flex items-center justify-between z-10">
-                <span className="truncate flex items-center gap-1.5">
-                  {isMyVote && <span className="text-orange-600">✓</span>}
-                  {opt.text}
-                </span>
-                <span className="text-gray-400 font-mono font-black">{percentage}%</span>
-              </div>
-            </button>
+            <div key={opt.id} className="relative w-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 min-h-9">
+              {/* Fluid Progress Bar Filling Track Visual Layer */}
+              {hasUserVoted && (
+                <div 
+                  className="absolute top-0 left-0 bottom-0 bg-orange-500/10 dark:bg-orange-500/15 transition-all duration-500" 
+                  style={{ width: `${percentage}%` }} 
+                />
+              )}
+
+              <button
+                type="button"
+                disabled={isLoading || hasUserVoted}
+                onClick={() => handleCastVote(opt.id)}
+                className="absolute inset-0 w-full h-full px-3 flex items-center justify-between text-left hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:cursor-default"
+              >
+                <span className="font-bold truncate pr-4">{opt.text}</span>
+                {hasUserVoted && <span className="font-mono font-black text-orange-600">{percentage}%</span>}
+              </button>
+            </div>
           );
         })}
       </div>

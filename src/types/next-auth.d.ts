@@ -5,6 +5,8 @@ declare module "next-auth" {
     user: {
       id: string;
       username: string | null;
+      postKarma: number | null;
+      commentKarma: number | null;
     } & DefaultSession["user"];
   }
 }

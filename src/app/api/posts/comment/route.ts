@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     }).catch((err) => console.error("COMMENT_MENTION_PROG_ERR:", err));
 
     return NextResponse.json({ commentId: comment.id }, { status: 201 });
-  } catch (error: unknown) {
+  } catch {
     return NextResponse.json({ message: "Internal Server Error." }, { status: 500 });
   }
 }

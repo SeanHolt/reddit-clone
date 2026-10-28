@@ -9,18 +9,10 @@ import { SubscribeLeaveButton } from "./SubscribeLeaveButton";
 import { OnlineCounterWidget } from "./OnlineCounterWidget";
 import { MemberFlairSelector } from "./MemberFlairSelector";
 import { connection } from "next/server";
-import { Prisma } from "@prisma/client";
+import { SubredditMegathreadHub } from "./SubredditMegathreadHub";
+import { SubredditWithRelations } from "@/types/db";
+import { LiveStreamTheaterCard } from "../streaming/LiveStreamTheaterCard";
 
-// Define the exact sub-query inclusion type schema contract
-type SubredditWithRelations = Prisma.SubredditGetPayload<{
-    include: {
-        flairs: true;
-        subscribers: true;
-        posts: {
-            include: { author: true; votes: true; media: true; _count: { select: { comments: true } } };
-        };
-    };
-}>;
 
 interface SubredditViewProps {
     slugPromise: Promise<{ slug: string }>;
@@ -30,26 +22,38 @@ export async function SubredditView({ slugPromise }: SubredditViewProps) {
     await connection();
     const { slug } = await slugPromise;
     const session = await auth();
-    const targetName = slug.toLowerCase();
 
     // Unified Query: Pull community details, custom user flairs, subscriber logs, and sorted posts
-    const subreddit = (await db.subreddit.findUnique({
-        where: { name: targetName },
+    const subreddit = await db.subreddit.findUnique({
+        where: { name: slug.toLowerCase() },
         include: {
-            flairs: true,
-            subscribers: true,
+            megathreadLinks: true,
+            subscribers: { select: { userId: true, selectedFlair: true } },
+            flairs: { select: { text: true, backgroundColor: true, textColor: true, createdAt: true, id: true, subredditId: true } },
             posts: {
-                include: { author: true, votes: true, media: true, _count: { select: { comments: true } } },
-                orderBy: [{ isSticky: "desc" }, { id: "desc" }],
+                include: {
+                    author: true,
+                    votes: true,
+                    media: true,
+                    _count: { select: { comments: true } }
+                },
+                orderBy: [{ isSticky: "desc" }, { id: "desc" }]
             },
-        },
-    })) as SubredditWithRelations | null; // Fixed: Cast explicitly to resolve missing sub-property flags
+            // INJECTED: Read ongoing broadcast nodes belonging to this specific subreddit canvas
+            liveStreams: {
+                where: { status: "STREAMING" },
+                select: { id: true, title: true, viewerCount: true },
+                take: 1 // Load the primary active stream channel if available
+            }
+        }
+    });
 
 
     if (!subreddit) notFound();
 
     const isSubscribed = subreddit.subscribers.some((sub) => sub.userId === session?.user?.id);
     const userSubRow = subreddit.subscribers.find((sub) => sub.userId === session?.user?.id);
+    const activeStream = subreddit.liveStreams && subreddit.liveStreams.length > 0 ? subreddit.liveStreams[0] : null;
 
     return (
         <div className="py-6 max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
@@ -62,6 +66,16 @@ export async function SubredditView({ slugPromise }: SubredditViewProps) {
                         </div>
                     ) : (
                         <div className="h-4 w-full" style={{ backgroundColor: subreddit.accentColor || "#ea580c" }} />
+                    )}
+                    <SubredditMegathreadHub links={subreddit.megathreadLinks || []} />
+                    {activeStream && (
+                        <div className="w-full max-w-2xl mx-auto">
+                            <LiveStreamTheaterCard
+                                streamId={activeStream.id}
+                                title={activeStream.title}
+                                initialViewerCount={activeStream.viewerCount}
+                            />
+                        </div>
                     )}
                     <div className="p-6">
                         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">r/{subreddit.name}</h1>

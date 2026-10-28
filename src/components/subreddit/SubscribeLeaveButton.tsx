@@ -22,7 +22,7 @@ export function SubscribeLeaveButton({ subredditId, isSubscribed }: SubscribeLea
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subredditId }),
       });
-
+      console.log("Subscription toggle response:", res);
       if (!res.ok) {
         throw new Error("Failed to change subscription status.");
       }

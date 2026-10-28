@@ -3,6 +3,8 @@ import Link from "next/link";
 import { VoteController } from "../posts/VoteController";
 import { PostWithRelations } from "@/types/db"; // Clean centralized type import
 
+export const instantiate = true; // Ensure this component is rendered on the client side
+
 interface PostSearchResultsProps {
   searchParamsPromise: Promise<{ q?: string }>;
 }

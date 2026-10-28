@@ -5,7 +5,24 @@ datasource db {
 generator client {
   provider = "prisma-client-js"
 }
+model Report {
+  id         String   @id @default(cuid())
+  reason     String   // e.g., "Spam", "Harassment"
+  createdAt  DateTime @default(now())
 
+  // Relations linking uniquely to specific creators, posts, and comments
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  postId     String?
+  post       Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  commentId  String?
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([commentId])
+}
 model User {
   id                  String    @id @default(cuid())
   email               String    @unique
@@ -18,6 +35,7 @@ model User {
   commentKarma        Int       @default(0)
   lastActiveAt        DateTime?
   activeSubredditName String?
+  isShadowBanned Boolean            @default(false)
 
   createdSubreddits Subreddit[]
   posts             Post[]
@@ -29,17 +47,35 @@ model User {
   moderationActions ModerationAction[]
   sentDMs           DirectMessage[]    @relation("SentDMs")
   receivedDMs       DirectMessage[]    @relation("ReceivedDMs")
-  pollVotes PollVote[]
-  savedPosts SavedPost[]
-  karmaLogs KarmaLog[]
-  postViews PostView[]
+  pollVotes         PollVote[]
+  savedPosts        SavedPost[]
+  karmaLogs         KarmaLog[]
+  postViews         PostView[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  moderatorAssignments ModeratorAssignment[]
+
+  wallets Wallet[]
+
+  postAwards PostAward[]
+
+  appealCases AppealCase[]
+
+  juryVotes JuryVote[]
+
+  modAuditLogs ModAuditLog[]
+
+  createdAssets MarketplaceItem[] @relation("AssetCreator")
+
+  inventory UserAsset[]
+  liveStreams LiveStream[] @relation("UserStreams")
 }
+
 model PollOption {
   id        String     @id @default(cuid())
-  text      String     // e.g., "React Server Components"
+  text      String // e.g., "React Server Components"
   postId    String
   post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
   votes     PollVote[]
@@ -55,46 +91,65 @@ model PollVote {
   optionId String
   option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
   @@unique([userId, optionId]) // Prevents single-user duplicate option gaming
   @@index([optionId])
 }
+
 model SavedPost {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
   // Relations to User and Post models
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId]) // Prevents single-user duplicate saving
   @@index([userId])
 }
+
 model Subreddit {
-  id                 String             @id @default(cuid())
-  name               String             @unique
-  description        String?
-  bannerUrl          String?            @default("")
-  accentColor        String?            @default("#ea580c")
-  autoModKeywords    String?            @default("")
+  id              String  @id @default(cuid())
+  name            String  @unique
+  description     String?
+  bannerUrl       String? @default("")
+  accentColor     String? @default("#ea580c")
+  autoModKeywords String? @default("")
 
   // Phase 5 Moderation Restriction Gates
-  minAccountAgeDays  Int                @default(0)
-  minKarmaRequired   Int                @default(0)
+  minAccountAgeDays Int @default(0)
+  minKarmaRequired  Int @default(0)
 
-  creatorId          String
-  creator            User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  posts              Post[]
-  subscribers        Subscription[]
-  moderationActions  ModerationAction[]
-  flairs             UserFlair[]
+isLocked            Boolean            @default(false)
+  autoRemoveThreshold Int                @default(5) // Default to auto-hiding after 5 reports
 
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  creatorId         String
+  creator           User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  posts             Post[]
+  subscribers       Subscription[]
+  moderationActions ModerationAction[]
+  flairs            UserFlair[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  moderatorAssignments ModeratorAssignment[]
+
+  customEmojis CustomEmoji[]
+
+  communityTags CommunityTag[]
+
+  appealCases AppealCase[]
+
+  megathreadLinks MegathreadLink[]
+
+  modAuditLogs ModAuditLog[]
+  liveStreams LiveStream[]
 }
+
 model Post {
   id        String  @id @default(cuid())
   title     String
@@ -114,11 +169,16 @@ model Post {
   notifications Notification[]
   reports       Report[]
   views         PostView[]
-  pollOptions PollOption[]
-  savedPosts SavedPost[]
-
+  pollOptions   PollOption[]
+  savedPosts    SavedPost[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  shareClicks ShareClick[]
+
+  tags CommunityTag[]
+
+  postAwards PostAward[]
 }
 
 model PostMedia {
@@ -161,14 +221,15 @@ model UserFlair {
 }
 
 model Subscription {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subredditId String
-  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
-
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subredditId   String
+  subreddit     Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   // Phase 5 Assigned User Flair Parameters
-  selectedFlair String? @default("")
+  selectedFlair String?   @default("")
 
   @@unique([userId, subredditId])
 }
@@ -199,21 +260,6 @@ model Notification {
   createdAt DateTime @default(now())
 }
 
-model Report {
-  id        String   @id @default(cuid())
-  reason    String
-  details   String?  @default("")
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  postId    String?
-  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
-  commentId String?
-  comment   Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-}
-
 model DirectMessage {
   id         String   @id @default(cuid())
   text       String
@@ -241,6 +287,7 @@ model ModerationAction {
   @@unique([userId, subredditId])
   @@index([userId])
   @@index([subredditId])
+  appealCases AppealCase[]
 }
 
 model KarmaLog {
@@ -269,4 +316,204 @@ model PostView {
 
   @@unique([userId, postId]) // Prevents single-user view count spamming
   @@index([postId])
+}
+
+model ModeratorAssignment {
+  id               String   @id @default(cuid())
+  canBanUsers      Boolean  @default(false)
+  canDeleteContent Boolean  @default(false)
+  canEditSettings  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  // Relations to User and Subreddit models
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subredditId]) // Ensures a user is appointed once per subreddit
+  @@index([subredditId])
+}
+model ShareClick {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations linking back to the parent Post tracking node
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+model CustomEmoji {
+  id          String   @id @default(cuid())
+  shortcode   String   // e.g., ":hype:" or ":verified:"
+  base64Data  String   // Inline graphical asset data
+  createdAt   DateTime @default(now())
+
+  // Relations linking to parent Subreddit model context
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@unique([subredditId, shortcode]) // Enforce shortcode uniqueness per community canvas
+  @@index([subredditId])
+}
+
+model CommunityTag {
+  id          String   @id @default(cuid())
+  label       String   // e.g., "Bug Report", "Tutorial"
+  bgHex       String   @default("#f3f4f6")
+  textHex     String   @default("#1f2937")
+  createdAt   DateTime @default(now())
+
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  posts       Post[]    // Relation array linking tags straight down onto target posts
+
+  @@unique([subredditId, label])
+  @@index([subredditId])
+}
+model Wallet {
+  id        String   @id @default(cuid())
+  balance   Int      @default(0)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  coinTransactions CoinTransaction[]
+}
+
+model CoinTransaction {
+  id        String   @id @default(cuid())
+  amount    Int      // Positive for credit (earn), negative for debit (spend)
+  type      String   // e.g., "UPVOTE_EARNED", "AWARD_PURCHASE", "DAILY_CHECKIN"
+  createdAt DateTime @default(now())
+
+  walletId  String
+  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId])
+}
+
+model PostAward {
+  id        String   @id @default(cuid())
+  awardType String   // e.g., "GOLD", "SILVER", "PLATINUM"
+  createdAt DateTime @default(now())
+
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  giverId   String
+  giver     User     @relation(fields: [giverId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+model AppealCase {
+  id          String     @id @default(cuid())
+  reason      String     // User's written appeal justification text
+  status      String     @default("PENDING") // PENDING, UPHELD, OVERTURNED
+  createdAt   DateTime   @default(now())
+
+  // Relations linking to the target ban record, user, and community context
+  actionId    String     @unique
+  action      ModerationAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  subredditId String
+  subreddit   Subreddit  @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  votes       JuryVote[]
+
+  @@index([subredditId])
+}
+
+model JuryVote {
+  id           String     @id @default(cuid())
+  type         String     // UPHOLD or OVERTURN
+  createdAt    DateTime   @default(now())
+
+  caseId       String
+  case         AppealCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  jurorId      String
+  juror        User       @relation(fields: [jurorId], references: [id], onDelete: Cascade)
+
+  @@unique([jurorId, caseId]) // Cryptographic guard rail blocking multi-vote system gaming
+  @@index([caseId])
+}
+model MegathreadLink {
+  id          String   @id @default(cuid())
+  title       String   // e.g., "Official Wiki Index"
+  url         String   // e.g., "https://..."
+  createdAt   DateTime @default(now())
+
+  // Relations linking directly back to the parent Subreddit
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@index([subredditId])
+}
+model ModAuditLog {
+  id          String   @id @default(cuid())
+  actionType  String   // e.g., "BAN_USER", "UNBAN_USER", "LOCKDOWN_TOGGLE", "AUTOMOD_UPDATE"
+  details     String   // e.g., "Suspended u/spambot permanently for Malicious Links"
+  createdAt   DateTime @default(now())
+
+  // Relations linking back to the actor and community context maps
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+  moderatorId String
+  moderator   User      @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+
+  @@index([subredditId])
+}
+model MarketplaceItem {
+  id          String      @id @default(cuid())
+  title       String      // e.g., "Neon Neon Comment Glow"
+  description String?
+  assetType   String      // e.g., "BORDER_GLOW", "FONT_STYLE", "BADGE"
+  styleValue  String      // e.g., "border-orange-500 shadow-[0_0_10px_#ea580c]"
+  price       Int         @default(100)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  creatorId   String
+  creator     User        @relation("AssetCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  ownerships  UserAsset[]
+
+  @@index([creatorId])
+}
+
+model UserAsset {
+  id         String          @id @default(cuid())
+  isEquipped Boolean         @default(false)
+  acquiredAt DateTime        @default(now())
+
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId     String
+  item       MarketplaceItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId]) // Cryptographic guard rail preventing multiple item duplicate purchases
+  @@index([itemId])
+}
+model LiveStream {
+  id             String   @id @default(cuid())
+  title          String   // e.g., "Jamming out on guitar on a Tuesday night!"
+  status         String   @default("STREAMING") // STREAMING, ENDED
+  viewerCount    Int      @default(0)
+  
+  // WebRTC Session Description Protocol (SDP) text strings for server orchestration
+  sdpOffer       String?  
+  sdpAnswer      String?  
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations anchoring the video line straight to a creator and a subreddit home
+  streamerId     String
+  streamer       User     @relation("UserStreams", fields: [streamerId], references: [id], onDelete: Cascade)
+  
+  subredditId    String
+  subreddit      Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@index([subredditId])
+  @@index([streamerId])
 }

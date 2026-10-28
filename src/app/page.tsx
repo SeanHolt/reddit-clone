@@ -1,30 +1,35 @@
 import { Suspense } from "react";
 import { HomeFeed } from "@/components/home/HomeFeed";
+import { TrendingCommunitiesSidebar } from "@/components/home/TrendingCommunitiesSidebar"; // Import our trending component
+import { CreateCommunitySidebarCard } from "@/components/home/CreateCommunitySidebarCard";
+import { MarketplaceSidebarCard } from "@/components/home/MarketplaceSidebarCard";
 
-interface HomePageProps {
-  searchParams: Promise<{ feed?: string }>;
+interface PageProps {
+    searchParams: Promise<{ feed?: string; sort?: string }>;
 }
 
-export default function Home({ searchParams }: HomePageProps) {
-  return (
-    <div className="py-8 max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Home Feed</h1>
-        <p className="text-sm text-gray-500 mt-1">Your aggregated stream of communities and trending topics.</p>
-      </div>
+export default async function HomePage({ searchParams }: PageProps) {
+    return (
+        <div className="py-6 max-w-5xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Primary Left Post Feed Pipeline Layout */}
+            <div className="md:col-span-2">
+                <Suspense fallback={<div className="h-96 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl animate-pulse shadow-sm" />}>
+                    <HomeFeed searchParamsPromise={searchParams} />
+                </Suspense>
+            </div>
 
-      <Suspense
-        fallback={
-          <div className="space-y-4 animate-pulse">
-            <div className="h-10 bg-white border border-gray-200 rounded-xl" />
-            <div className="bg-white p-5 border border-gray-200 rounded-xl h-32" />
-            <div className="bg-white p-5 border border-gray-200 rounded-xl h-32" />
-          </div>
-        }
-      >
-        {/* Pass down the search params promise to let it stream independently */}
-        <HomeFeed searchParamsPromise={searchParams} />
-      </Suspense>
-    </div>
-  );
+            {/* Right Sidebar Columns Container Grid */}
+            <div className="hidden md:block space-y-4">
+                <Suspense fallback={<div className="h-24 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl animate-pulse shadow-sm" />}>
+                    <CreateCommunitySidebarCard />
+                </Suspense>
+                <MarketplaceSidebarCard />
+                <Suspense fallback={
+                    <div className="h-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl animate-pulse shadow-sm" />
+                }>
+                    <TrendingCommunitiesSidebar />
+                </Suspense>
+            </div>
+        </div>
+    );
 }

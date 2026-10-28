@@ -8,6 +8,11 @@ import { connection } from "next/server";
 import { TransferOwnershipForm } from "./TransferOwnershipForm";
 import { FlairManagementForm } from "./FlairManagementForm";
 import { GateConfigForm } from "./GateConfigForm";
+import { ModAppointmentGrid } from "./ModAppointmentGrid";
+import { EmojiAndTagFactoryForm } from "./EmojiAndTagFactoryForm";
+import { AntiRaidConfigForm } from "./AntiRaidConfigForm";
+import { MegathreadConfigForm } from "./MegathreadConfigForm";
+import { ModAuditStream } from "./ModAuditStream";
 
 export async function ModeratorQueueList() {
     await connection();
@@ -22,7 +27,16 @@ export async function ModeratorQueueList() {
             name: true,
             autoModKeywords: true,
             minAccountAgeDays: true, // Selected values
-            minKarmaRequired: true
+            minKarmaRequired: true,
+            isLocked: true,
+            autoRemoveThreshold: true,
+            modAuditLogs: {
+                include: {
+                    moderator: { select: { username: true } }
+                },
+                orderBy: { createdAt: "desc" },
+                take: 15 // Limit view window metrics to the 15 most recent logs
+            }
         } // Selected autoModKeywords
     });
     const ownedIds = ownedSubreddits.map((s) => s.id);
@@ -50,20 +64,17 @@ export async function ModeratorQueueList() {
                             <div className="text-xs font-bold text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-950 p-2 rounded border border-gray-100 dark:border-gray-800">
                                 Community: r/{sub.name}
                             </div>
-
-                            {/* 1. Restrict user ban panel controls */}
                             <ModeratorBanForm subredditId={sub.id} />
-
-                            {/* 2. Automated AutoMod phrase filter keywords panel */}
                             <AutoModConfigForm subredditId={sub.id} initialKeywords={sub.autoModKeywords || ""} />
-
-                            {/* RESTORED: 3. Dynamic subscriber user flair badge factory generation panel */}
                             <FlairManagementForm subredditId={sub.id} />
-
-                            {/* 4. Subreddit user age and karma score entry restriction gates panel */}
                             <GateConfigForm subredditId={sub.id} initialAge={sub.minAccountAgeDays} initialKarma={sub.minKarmaRequired} />
-
-                            {/* 5. Permanent administrator ownership relinquishing controls panel */}
+                            <AntiRaidConfigForm subredditId={sub.id} initialIsLocked={sub.isLocked} initialThreshold={sub.autoRemoveThreshold} />
+                            <MegathreadConfigForm subredditId={sub.id} />
+                            <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80">
+                                <ModAuditStream logs={sub.modAuditLogs} />
+                            </div>
+                            <ModAppointmentGrid subredditId={sub.id} />
+                            <EmojiAndTagFactoryForm subredditId={sub.id} />
                             <TransferOwnershipForm subredditId={sub.id} subredditName={sub.name} />
                         </div>
                     ))}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { logServerError } from "@/lib/errors";
+import { processVoteReward } from "@/lib/vote-rewards";
 
 export async function POST(req: Request) {
   try {
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
         await syncCommentKarma(commentRecord.authorId);
       }
     }
+    processVoteReward({ postId:targetId, voterId: session.user.id, voteType }).catch(console.error);
 
     return NextResponse.json({ message: "Vote processed successfully." }, { status: 200 });
   } catch (error: unknown) {
