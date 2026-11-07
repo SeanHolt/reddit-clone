@@ -35,9 +35,9 @@ export async function HomeFeed({ searchParamsPromise }: HomeFeedProps) {
             ) : (
                 <InfiniteScrollStream
                     initialPosts={items}
-                    initialCursor={data.nextCursor}
+                    initialNextCursor={data.nextCursor}
                     currentUserId={session?.user?.id}
-                    sort={activeFeed === "popular" ? "hot" : "new"}
+                    feedType={activeFeed === "popular" ? "hot" : "new"}
                 />
             )}
         </div>

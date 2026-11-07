@@ -1,15 +1,17 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { InventoryToggleGrid } from "@/components/marketplace/InventoryToggleGrid";
 
+// FIXED: Exempt this dashboard route from static instant pre-rendering validation checks
 export const instant = false;
 
 export default async function InventorySettingsPage() {
+  await connection();
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  // Query the user's complete unlocked collection from the database ledger rows
   const unlockedAssets = await db.userAsset.findMany({
     where: { userId: session.user.id },
     include: {
@@ -24,18 +26,8 @@ export default async function InventorySettingsPage() {
         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50 select-none">
           🎒 Custom Identity Vault & Inventory
         </h1>
-        <p className="text-sm font-semibold text-gray-400 dark:text-gray-400 mt-1">
-          Equip, manage, or clear your unlocked marketplace asset cosmetics and profile skins on-the-fly.
-        </p>
       </div>
-
-      {unlockedAssets.length === 0 ? (
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-8 text-center text-gray-400 font-medium italic shadow-sm text-xs select-none">
-          🎒 Inventory Empty: You haven&apos;t unlocked any marketplace asset custom skins yet.
-        </div>
-      ) : (
-        <InventoryToggleGrid initialAssets={unlockedAssets} />
-      )}
+      <InventoryToggleGrid initialAssets={unlockedAssets} />
     </div>
   );
 }

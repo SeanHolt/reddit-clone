@@ -1,34 +1,31 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { Suspense } from "react";
-import "./globals.css";
+import React, { Suspense } from "react";
 import { Navbar } from "@/components/Navbar";
 import { RecentSubredditTracker } from "@/components/subreddit/RecentSubredditTracker";
+import "./globals.css"; // Ensure standard Tailwind theme styles load across the app
 
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Reddit Clone",
-  description: "A full-stack Reddit clone built with Next.js",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
+interface RootLayoutProps {
   children: React.ReactNode;
-}>) {
+  modal: React.ReactNode; // Parallel slot anchor row to handle intercepted overlay windows
+}
+
+export default function RootLayout({ children, modal }: RootLayoutProps) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      {/* Fixed: Class strings are now fully decoupled from conflicting root assignments */}
-      <body className={`${inter.className} antialiased pt-16 min-h-screen`}>
+    <html lang="en">
+      <body className="antialiased bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-50 transition-colors duration-200">
+        {/* MOUNTED: Hydrate the active context tracker to monitor the last 3 visited subreddits */}
         <Suspense fallback={null}>
           <RecentSubredditTracker />
         </Suspense>
-        
+
+        {/* RESTORED: Centralized application shell navigation bar header */}
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <main className="min-h-screen">
           {children}
         </main>
+        
+        {/* Render the parallel route modal overlay slot layer dynamically here */}
+        {modal}
       </body>
     </html>
   );

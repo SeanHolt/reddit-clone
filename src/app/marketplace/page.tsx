@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { MarketplaceItemCard } from "@/components/marketplace/MarketplaceItemCard";
 import Link from "next/link";
+import { connection } from "next/server";
 
 // Explicitly inform Next.js 16 to treat this parameter-dependent route as a dynamic server page
 export const instant = false;
 
 export default async function MarketplacePage() {
+    await connection();
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
 

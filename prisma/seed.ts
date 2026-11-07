@@ -56,6 +56,36 @@ async function main() {
 
   // 1. Generate 30 Distinct User Accounts programmatically
   console.log("Generating 30 user profiles...");
+  console.log("👤 Syncing automation virtual test juror account profile...");
+
+  await prisma.user.upsert({
+    where: { id: "test-juror-id" },
+    update: {},
+    create: {
+      id: "test-juror-id",
+      username: "testoperator",
+      displayName: "Test Operator",
+      password: "secure_hashed_password",
+      email: "test@example.com",
+      postKarma: 1000,
+      commentKarma: 500,
+    },
+  });
+  await prisma.subreddit.upsert({
+      where: { name: "test_community" },
+      update: {},
+      create: {
+        name: "test_community",
+        description: "Test Community Workspace",
+        creatorId: "test-juror-id",
+        autoModKeywords: "spam,malware",
+        minAccountAgeDays: 0,
+        minKarmaRequired: 0,
+        isLocked: false,
+        autoRemoveThreshold: 5,
+      },
+    });
+  
   const userIds: string[] = [];
   for (let i = 1; i <= totalCount; i++) {
     const id = `seed_user_${i}`;

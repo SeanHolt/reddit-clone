@@ -13,6 +13,10 @@ import { EmojiAndTagFactoryForm } from "./EmojiAndTagFactoryForm";
 import { AntiRaidConfigForm } from "./AntiRaidConfigForm";
 import { MegathreadConfigForm } from "./MegathreadConfigForm";
 import { ModAuditStream } from "./ModAuditStream";
+import { LevelConfigForm } from "./LevelConfigForm";
+import { AudioStageConsole } from "../streaming/AudioStageConsole";
+import { FederationManager } from "./FederationManager";
+import { AntiRaidSyncToggle } from "./AntiRaidSyncToggle";
 
 export async function ModeratorQueueList() {
     await connection();
@@ -73,9 +77,15 @@ export async function ModeratorQueueList() {
                             <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80">
                                 <ModAuditStream logs={sub.modAuditLogs} />
                             </div>
+                            <LevelConfigForm />
+                            <div className="pt-2 border-t border-gray-100 dark:border-gray-800/80">
+                                <AudioStageConsole subredditId={sub.id} />
+                            </div>
                             <ModAppointmentGrid subredditId={sub.id} />
                             <EmojiAndTagFactoryForm subredditId={sub.id} />
                             <TransferOwnershipForm subredditId={sub.id} subredditName={sub.name} />
+                            <FederationManager subredditId={sub.id} />
+                            <AntiRaidSyncToggle />
                         </div>
                     ))}
                 </div>

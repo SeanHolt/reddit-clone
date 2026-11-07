@@ -1,25 +1,30 @@
 import { Suspense } from "react";
 import { SubredditView } from "@/components/subreddit/SubredditView";
 
-interface SubredditPageProps {
+// FIXED: Exempt this dynamic parameter-bound segment from static pre-rendering validation gates
+export const instant = false;
+
+interface PageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ feedMode?: string; sort?: string }>;
 }
 
-export default function SubredditPage({ params }: SubredditPageProps) {
+export default async function SubredditPage({ params, searchParams }: PageProps) {
+  const { slug } = await params;
+
   return (
-    <Suspense
-      fallback={
-        <div className="py-6 max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
-          <div className="md:col-span-2 space-y-4">
-            <div className="h-24 bg-white border border-gray-200 rounded-xl" />
-            <div className="h-48 bg-white border border-gray-200 rounded-xl" />
-          </div>
-          <div className="h-36 bg-white border border-gray-200 rounded-xl" />
+    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950/20 transition-colors duration-200">
+      <Suspense fallback={
+        <div className="max-w-4xl mx-auto py-6 px-4 animate-pulse space-y-6">
+          <div className="h-24 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl" />
+          <div className="h-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl" />
         </div>
-      }
-    >
-      {/* Hand off the unresolved URL params promise to let it stream independently */}
-      <SubredditView slugPromise={params} />
-    </Suspense>
+      }>
+        <SubredditView 
+          slug={slug} 
+          searchParamsPromise={searchParams} 
+        />
+      </Suspense>
+    </div>
   );
 }

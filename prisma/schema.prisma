@@ -71,6 +71,8 @@ model User {
 
   inventory UserAsset[]
   liveStreams LiveStream[] @relation("UserStreams")
+  subredditProgress UserSubredditProgress[]
+  audioSpaces LiveAudioSpace[] @relation("UserTalks")
 }
 
 model PollOption {
@@ -148,6 +150,10 @@ isLocked            Boolean            @default(false)
 
   modAuditLogs ModAuditLog[]
   liveStreams LiveStream[]
+  subredditProgress UserSubredditProgress[]
+  audioSpaces LiveAudioSpace[]
+  federatedAlliances SubredditFederation[]
+  initiatedFederatedBans FederatedBanSync[]
 }
 
 model Post {
@@ -516,4 +522,82 @@ model LiveStream {
 
   @@index([subredditId])
   @@index([streamerId])
+}
+model UserSubredditProgress {
+  id          String    @id @default(cuid())
+  xp          Int       @default(0)
+  level       Int       @default(1)
+  updatedAt   DateTime  @updatedAt
+
+  // Relations mapping the progress row back to a specific member and space
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subredditId String
+  subreddit   Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subredditId]) // Composite guard rail preventing duplicate tracking maps
+  @@index([subredditId])
+}
+model LiveAudioSpace {
+  id             String   @id @default(cuid())
+  title          String   // e.g., "Developer Q&A: Building the Marketplace"
+  status         String   @default("OPEN") // OPEN, MUTED, CONCLUDED
+  listenerCount  Int      @default(0)
+  maxSpeakers    Int      @default(6)
+  
+  // WebRTC multi-peer session negotiation storage descriptors
+  sdpOffer       String?
+  sdpAnswer      String?
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations anchoring the talk channel to a community and an operating host operator
+  hostId         String
+  host           User     @relation("UserTalks", fields: [hostId], references: [id], onDelete: Cascade)
+  
+  subredditId    String
+  subreddit      Subreddit @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@index([subredditId])
+  @@index([hostId])
+}
+model Federation {
+  id          String                @id @default(cuid())
+  name        String                @unique // e.g., "The Tech & Dev Coalition"
+  description String?
+  createdAt   DateTime              @default(now())
+  
+  alliances   SubredditFederation[]
+  federatedBans FederatedBanSync[]
+}
+
+model SubredditFederation {
+  id           String     @id @default(cuid())
+  status       String     @default("PENDING") // PENDING, ACTIVE
+  joinedAt     DateTime   @default(now())
+
+  federationId String
+  federation   Federation @relation(fields: [federationId], references: [id], onDelete: Cascade)
+  
+  subredditId  String
+  subreddit    Subreddit  @relation(fields: [subredditId], references: [id], onDelete: Cascade)
+
+  @@unique([federationId, subredditId]) // Cryptographic guard rail preventing duplicate mapping contracts
+  @@index([subredditId])
+}
+model FederatedBanSync {
+  id           String   @id @default(cuid())
+  targetUserId String
+  reason       String?  // e.g., "Multi-community spam raid bot network"
+  createdAt    DateTime @default(now())
+
+  federationId String
+  federation   Federation @relation(fields: [federationId], references: [id], onDelete: Cascade)
+  
+  originSubId  String
+  originSub    Subreddit  @relation(fields: [originSubId], references: [id], onDelete: Cascade)
+
+  @@index([targetUserId])
+  @@index([federationId])
 }

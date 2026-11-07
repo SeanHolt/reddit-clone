@@ -1,102 +1,139 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { VoteController } from "../posts/VoteController";
-import { MediaCarousel } from "./MediaCarousel";
-import { SafeMediaWrapper } from "./SafeMediaWrapper";
-import { ReportButton } from "./ReportButton";
-import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
+import { useEffect, useState, useRef } from "react";
 import { PostWithRelations } from "@/types/db";
-import Link from "next/link";
-import { SharePostButton } from "../posts/SharePostButton";
-import { parseInlineCustomEmojis } from "@/lib/emoji-parser"; // Import our shortcode parsing engine
+import { VoteController } from "../posts/VoteController";
 import { AwardBadgeList } from "../posts/AwardBadgeList";
 import { PollCardController } from "../posts/PollCardController";
+import { parseInlineCustomEmojis } from "@/lib/emoji-parser";
+import Link from "next/link";
+import { MediaCarousel } from "./MediaCarousel";
 
 interface InfiniteScrollStreamProps {
     initialPosts: PostWithRelations[];
-    initialCursor: string | null;
+    initialNextCursor: string | null;
+    currentUserId: string | null | undefined;
+    feedType: string;
     subredditId?: string;
-    currentUserId?: string | null;
-    sort?: string;
 }
 
-export function InfiniteScrollStream({ initialPosts, initialCursor, subredditId, currentUserId, sort }: InfiniteScrollStreamProps) {
+export function InfiniteScrollStream({ initialPosts, initialNextCursor, currentUserId, feedType, subredditId }: InfiniteScrollStreamProps) {
     const [posts, setPosts] = useState<PostWithRelations[]>(initialPosts);
-    const [nextCursor, setNextCursor] = useState<string | null>(initialCursor);
+    const [cursor, setCursor] = useState<string | null>(initialNextCursor);
     const [isLoading, setIsLoading] = useState(false);
-    const { elementRef, isIntersecting } = useIntersectionObserver();
+    const observerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!isIntersecting || !nextCursor || isLoading) return;
+        const observer = new IntersectionObserver(
+            async (entries) => {
+                // FIXED: Extract the first entry item token node out of the entries array row cleanly
+                const entry = entries[0];
 
-        const fetchNextPage = async () => {
-            setIsLoading(true);
-            try {
-                let url = `/api/posts/feed?cursor=${nextCursor}&sort=${sort || "hot"}`;
-                if (subredditId) url += `&subredditId=${subredditId}`;
+                if (entry && entry.isIntersecting && cursor && !isLoading) {
+                    setIsLoading(true);
+                    try {
+                        const url = `/api/posts/feed?feed=${feedType}&cursor=${cursor}${subredditId ? `&subredditId=${subredditId}` : ""}`;
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const data = await res.json();
+                            setPosts((prev) => [...prev, ...data.items]);
+                            setCursor(data.nextCursor);
+                        }
+                    } catch (err) {
+                        console.error("FEED_PAGINATION_STREAM_CRASH:", err);
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+            },
+            { threshold: 0.1, rootMargin: "150px" }
+        );
 
-                const res = await fetch(url);
-                if (!res.ok) throw new Error("Failed to load stream increment.");
-
-                const data = await res.json();
-                setPosts((prev) => [...prev, ...(data.items as PostWithRelations[])]);
-                setNextCursor(data.nextCursor);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchNextPage();
-    }, [isIntersecting, nextCursor, isLoading, subredditId, sort]);
-
+        const currentElement = observerRef.current;
+        if (currentElement) observer.observe(currentElement);
+        return () => { if (currentElement) observer.unobserve(currentElement); };
+    }, [cursor, isLoading, feedType, subredditId]);
     return (
-        <div className="space-y-4">
-            {posts.map((post) => {
-                const upvotes = post.votes.filter((v) => v.type === "UP").length;
-                const downvotes = post.votes.filter((v) => v.type === "DOWN").length;
-                const currentVoteRecord = post.votes.find((v) => v.userId === currentUserId);
-                const urls = post.media.map((m) => m.url);
-                const subredditEmojis = post.subreddit.customEmojis || []; // Hydrate custom emojis from include relations
+        <div className="space-y-4 text-xs font-semibold text-gray-700 dark:text-gray-300">
+            <div className="space-y-4">
+                {posts.map((post) => {
+                    const subredditEmojis = post.subreddit?.customEmojis || [];
+                    const upvotes = post.votes?.filter((v) => v.type === "UP").length || 0;
+                    const downvotes = post.votes?.filter((v) => v.type === "DOWN").length || 0;
+                    const userVoteRecord = post.votes?.find((v) => v.userId === currentUserId);
 
-                return (
-                    <div key={post.id} className="flex bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden hover:border-gray-300 dark:hover:border-gray-700 transition-all duration-200">
-                        <VoteController targetId={post.id} targetType="POST" initialScore={upvotes - downvotes} currentVote={currentVoteRecord ? (currentVoteRecord.type as "UP" | "DOWN") : null} hasUser={!!currentUserId} />
-                        <div className="p-5 flex-1 space-y-1">
-                            <p className="text-xs text-gray-400">
-                                <Link href={`/r/${post.subreddit.name}`} className="font-bold text-gray-700 dark:text-gray-300 hover:underline">r/{post.subreddit.name}</Link>
-                                {post.isSticky && <span className="ml-2 text-green-600 dark:text-green-400 font-extrabold">📌 Pinned</span>}
-                            </p>
-                            <Link href={`/r/${post.subreddit.name}/comments/${post.id}`} className="block group">
-                                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors">{parseInlineCustomEmojis(post.title, subredditEmojis)}</h2>
-                            </Link>
-                            <AwardBadgeList postId={post.id} initialAwards={post.awards || []} hasUser={!!currentUserId} />
-                            {post.content && <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{post.content}</p>}
-                            {post.pollOptions && post.pollOptions.length > 0 && (
-                                <div className="pt-2 animate-fadeIn">
-                                    <PollCardController
-                                        postId={post.id}
-                                        pollOptions={post.pollOptions}
-                                        currentUserId={currentUserId}
-                                    />
+                    const userProgress = post.author?.subredditProgress || [];
+                    const activeProgress = userProgress.find((p) => p.subredditId === post.subredditId);
+                    const currentLevel = activeProgress ? activeProgress.level : 1;
+
+                    return (
+                        <div key={post.id} className="flex bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-xs overflow-hidden transition-colors duration-200 animate-fadeIn">
+                            {/* Left Column: Core Side Vote Controller Bar */}
+                            <VoteController
+                                targetId={post.id}
+                                targetType="POST"
+                                initialScore={upvotes - downvotes}
+                                currentVote={userVoteRecord ? (userVoteRecord.type as "UP" | "DOWN") : null}
+                                hasUser={!!currentUserId}
+                            />
+
+                            {/* Right Column: Dynamic Post Presentation Content */}
+                            <div className="p-4 flex-1 space-y-2.5 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 font-semibold select-none">
+                                    <Link href={`/r/${post.subreddit.name}`} className="font-black text-gray-700 dark:text-gray-300 hover:underline">
+                                        r/{post.subreddit.name}
+                                    </Link>
+                                    <span>•</span>
+                                    <span>Posted by</span>
+                                    <Link href={`/u/${post.author?.username || "anonymous"}`} className="font-bold text-gray-500 hover:underline">
+                                        u/{post.author?.username || "anonymous"}
+                                    </Link>
+                                    <span className="px-1.5 py-0.5 ml-0.5 rounded bg-orange-500/10 text-orange-600 dark:bg-orange-400/10 dark:text-orange-400 text-[9px] font-black uppercase tracking-wider border border-orange-500/10">
+                                        Lvl {currentLevel}
+                                    </span>
                                 </div>
-                            )}
-                            <SafeMediaWrapper isNSFW={post.isNSFW} isSpoiler={post.isSpoiler}>
-                                <MediaCarousel mediaUrls={urls} />
-                            </SafeMediaWrapper>
-                            <div className="pt-2 flex items-center gap-4">
-                                <Link href={`/r/${post.subreddit.name}/comments/${post.id}`} className="text-xs text-gray-400 font-medium">
-                                    💬 {post._count?.comments || 0} Comments
+
+                                <Link href={`/r/${post.subreddit.name}/comments/${post.id}`} className="block group">
+                                    <h2 className="text-base font-extrabold text-gray-900 dark:text-gray-100 group-hover:text-orange-600 transition-colors leading-snug">
+                                        {parseInlineCustomEmojis(post.title, subredditEmojis)}
+                                    </h2>
                                 </Link>
-                                <SharePostButton postId={post.id} />
-                                <ReportButton targetId={post.id} targetType="POST" hasUser={!!currentUserId} />
+                                {post.content && <p className="text-xs text-gray-500 dark:text-gray-400 font-medium line-clamp-3 leading-relaxed font-sans">{post.content}</p>}
+
+                                {/* Media Presentation: Multi-Image Carousel Slider Layer */}
+                                {post.media && post.media.length > 0 && (
+                                    <div className="pt-1 max-w-xl">
+                                        <MediaCarousel
+                                            mediaUrls={post.media.map((item) => item.url)}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Survey Elements: Dynamic Interactive Poll Container */}
+                                {post.pollOptions && post.pollOptions.length > 0 && (
+                                    <div className="pt-1">
+                                        <PollCardController postId={post.id} pollOptions={post.pollOptions} currentUserId={currentUserId} />
+                                    </div>
+                                )}
+
+                                {/* Social Badging Drawer Layer Container */}
+                                <div className="pt-1.5 border-t border-gray-50 dark:border-gray-800/60 flex items-center justify-between gap-4">
+                                    <AwardBadgeList postId={post.id} initialAwards={post.postAwards || []} hasUser={!!currentUserId} />
+                                    <Link href={`/r/${post.subreddit.name}/comments/${post.id}`} className="text-[11px] text-gray-400 font-bold hover:underline shrink-0">
+                                        💬 {post._count?.comments || 0} Comments
+                                    </Link>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                );
-            })}
-            {nextCursor && <div ref={elementRef} className="h-12 flex items-center justify-center text-xs text-gray-400 font-bold animate-pulse">⏳ Loading...</div>}
+                    );
+                })}
+            </div>
+
+            {cursor && (
+                <div ref={observerRef} className="h-12 flex items-center justify-center text-[10px] font-black uppercase tracking-wider text-orange-600 dark:text-orange-400 select-none">
+                    {isLoading ? "🔄 Loading next page loop threads..." : "↕ Keep scrolling to discover content"}
+                </div>
+            )}
         </div>
     );
 }
